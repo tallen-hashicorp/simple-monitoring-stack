@@ -1,116 +1,3 @@
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: monitoring
----
-# Prometheus ConfigMap
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-  namespace: monitoring
-  labels:
-    app: prometheus
-data:
-  prometheus.yml: |
-    global:
-      scrape_interval: 15s
-    scrape_configs:
-      - job_name: 'prometheus'
-        static_configs:
-          - targets: ['localhost:9090']
-      - job_name: 'pushgateway'
-        static_configs:
-          - targets: ['pushgateway:9091']
----
-# Prometheus Deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: prometheus-deployment
-  namespace: monitoring
-  labels:
-    app: prometheus
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: prometheus
-  template:
-    metadata:
-      labels:
-        app: prometheus
-    spec:
-      containers:
-        - name: prometheus
-          image: prom/prometheus:v2.37.0
-          ports:
-            - containerPort: 9090
-          volumeMounts:
-            - name: prometheus-config-volume
-              mountPath: /etc/prometheus/
-      volumes:
-        - name: prometheus-config-volume
-          configMap:
-            name: prometheus-config
----
-# Prometheus Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus-service
-  namespace: monitoring
-  labels:
-    app: prometheus
-spec:
-  type: NodePort
-  ports:
-    - port: 9090
-      targetPort: 9090
-  selector:
-    app: prometheus
----
-# Pushgateway Deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: pushgateway-deployment
-  namespace: monitoring
-  labels:
-    app: pushgateway
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: pushgateway
-  template:
-    metadata:
-      labels:
-        app: pushgateway
-    spec:
-      containers:
-        - name: pushgateway
-          image: prom/pushgateway:v1.4.2
-          ports:
-            - containerPort: 9091
----
-# Pushgateway Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: pushgateway
-  namespace: monitoring
-  labels:
-    app: pushgateway
-spec:
-  type: NodePort
-  ports:
-    - port: 9091
-      targetPort: 9091
-  selector:
-    app: pushgateway
----
 # Grafana Data Source ConfigMap
 apiVersion: v1
 kind: ConfigMap
@@ -129,7 +16,7 @@ data:
         url: http://prometheus-service:9090
         isDefault: true
 ---
-# Grafana Deployment with Provisioning Volume
+# Grafana Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -154,15 +41,12 @@ spec:
             - containerPort: 3000
           volumeMounts:
             - name: grafana-config-volume
-              mountPath: /etc/grafana/provisioning/datasources
-              subPath: datasource.yaml
+              mountPath: /etc/grafana/provisioning/datasources/
+              readOnly: true
       volumes:
         - name: grafana-config-volume
           configMap:
             name: grafana-datasource
-            items:
-              - key: datasource.yaml
-                path: datasource.yaml
 ---
 # Grafana Service
 apiVersion: v1
