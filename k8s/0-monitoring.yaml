@@ -111,7 +111,25 @@ spec:
   selector:
     app: pushgateway
 ---
-# Grafana Deployment
+# Grafana Data Source ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  namespace: monitoring
+  labels:
+    app: grafana
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-service:9090
+        isDefault: true
+---
+# Grafana Deployment with Provisioning Volume
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -134,6 +152,17 @@ spec:
           image: grafana/grafana:10.0.0
           ports:
             - containerPort: 3000
+          volumeMounts:
+            - name: grafana-config-volume
+              mountPath: /etc/grafana/provisioning/datasources
+              subPath: datasource.yaml
+      volumes:
+        - name: grafana-config-volume
+          configMap:
+            name: grafana-datasource
+            items:
+              - key: datasource.yaml
+                path: datasource.yaml
 ---
 # Grafana Service
 apiVersion: v1
