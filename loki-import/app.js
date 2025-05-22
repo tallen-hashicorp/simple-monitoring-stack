@@ -14,8 +14,10 @@ const LOKI_URL = 'http://localhost:3100/loki/api/v1/push';
 const LABELS = { job: 'nginx', app: 'tfe' };
 const BATCH_SIZE = 100;
 
+// Create a nanosecond timestamp string
+const nowNs = () => `${Date.now()}000000`;
+
 async function pushBatch(lines) {
-  const nowNs = () => `${Date.now()}000000`;
   const payload = {
     streams: [{
       stream: LABELS,
@@ -29,18 +31,30 @@ async function pushBatch(lines) {
     });
     return res.status;
   } catch (err) {
-    console.error('Error pushing to Loki:', err.response?.status || err.message);
+    console.error('❌ Error pushing to Loki:', err.response?.status || err.message);
     return null;
   }
 }
 
+async function countLines(path) {
+  const fileStream = fs.createReadStream(path);
+  const rl = readline.createInterface({ input: fileStream });
+  let count = 0;
+  for await (const _ of rl) {
+    count++;
+  }
+  return count;
+}
+
 (async () => {
-  const totalLines = Number((await fs.promises.readFile(filePath)).toString().split('\n').length);
+  console.log(`📊 Counting lines in ${filePath}...`);
+  const totalLines = await countLines(filePath);
+
   const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
   bar.start(totalLines, 0);
 
   const fileStream = fs.createReadStream(filePath);
-  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+  const rl = readline.createInterface({ input: fileStream });
 
   let batch = [];
   let lineCount = 0;
@@ -58,11 +72,10 @@ async function pushBatch(lines) {
     }
   }
 
-  // Push any remaining logs
   if (batch.length) {
     await pushBatch(batch);
   }
 
   bar.stop();
-  console.log('✅ Done.');
+  console.log('✅ Import complete.');
 })();

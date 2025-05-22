@@ -46,5 +46,5 @@ kubectl delete -f k8s
 ## Manually process NGINX logs to loki
 
 ```bash
-node 
+node loki-import/app.js nginx-access.log
 ```
