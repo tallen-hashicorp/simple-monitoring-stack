@@ -27,7 +27,7 @@ kubectl -n monitoring port-forward services/pushgateway 9091:9091
 ## Using the Gauge in Grafana
 Push your data to the Pushgateway like this:
 ```bash
-echo "gauge_value 4" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/tickets_raised
+echo "tickets_raised 3" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/tickets_raised
 ```
 Add Prometheus as a data source in Grafana, then create a gauge panel and use gauge_value as the metric.
 
