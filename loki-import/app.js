@@ -6,8 +6,8 @@ const cliProgress = require('cli-progress');
 const filePath = process.argv[2];
 
 if (!filePath || !fs.existsSync(filePath)) {
-  console.error('Usage: node loki-import.js /path/to/nginx-access.log');
-  process.exit(1);
+    console.error('Usage: node loki-import.js /path/to/nginx-access.log');
+    process.exit(1);
 }
 
 const LOKI_URL = 'http://localhost:3100/loki/api/v1/push';
@@ -18,95 +18,133 @@ const BATCH_SIZE = 100;
 const nowNs = () => `${Date.now()}000000`;
 
 async function pushBatch(lines) {
-  const payload = {
-    streams: [{
-      stream: LABELS,
-      values: lines.map(line => [parseLokiTimestamp(line), line])
-    }]
-  };
+    const stream = {
+        stream: LABELS,
+        values: []
+    };
 
-  let retries = 5;
-  let delay = 200; // start with 200ms
+    lines.forEach(line => {
+        const { line: rawLine, labels } = parseLogLine(line);
+        const timestamp = parseLokiTimestamp(rawLine);
 
-  while (retries > 0) {
-    try {
-      const res = await axios.post(LOKI_URL, payload, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      return res.status;
-    } catch (err) {
-      const status = err.response?.status || 0;
-      if (status === 429 && retries > 0) {
-        console.warn(`🔁 Rate limited. Retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
-        retries--;
-        delay *= 2; // exponential backoff
-      } else {
-        console.error('❌ Error pushing to Loki:', status || err.message);
-        return null;
-      }
+        const jsonLog = {
+            ...labels,
+            raw: rawLine // optional: include original line for reference
+        };
+
+        stream.values.push([timestamp, JSON.stringify(jsonLog)]);
+    });
+
+    const payload = { streams: [stream] };
+
+    let retries = 5;
+    let delay = 200; // start with 200ms
+
+    while (retries > 0) {
+        try {
+            const res = await axios.post(LOKI_URL, payload, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+            return res.status;
+        } catch (err) {
+            const status = err.response?.status || 0;
+            if (status === 429 && retries > 0) {
+                // console.warn(`🔁 Rate limited. Retrying in ${delay}ms...`);
+                await new Promise(r => setTimeout(r, delay));
+                retries--;
+                delay *= 2; // exponential backoff
+            } else {
+                console.error('❌ Error pushing to Loki:', status || err.message);
+                return null;
+            }
+        }
     }
-  }
 
-  console.error('❌ Failed after retries');
-  return null;
+    console.error('❌ Failed after retries');
+    return null;
+}
+
+function parseLogLine(line) {
+    const regex = /^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) ([^ ]+)[^"]*" (\d{3}) (\d+|-) "[^"]*" "([^"]*)"/;
+    const match = line.match(regex);
+
+    if (!match) {
+        return {
+            line,
+            labels: { parse_error: true }
+        };
+    }
+
+    const [_, ip, timestamp, method, path, status, size, userAgent] = match;
+
+    return {
+        line,
+        labels: {
+            ip,
+            method,
+            path,
+            status,
+            size: isNaN(size) ? null : Number(size),
+            userAgent
+        }
+    };
 }
 
 function parseLokiTimestamp(logLine) {
-  const match = logLine.match(/\[(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) [+\-]\d{4}\]/);
-  if (!match) return `${Date.now()}000000`; // fallback
+    const match = logLine.match(/\[(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) [+\-]\d{4}\]/);
+    if (!match) return `${Date.now()}000000`; // fallback
 
-  const [_, day, monthStr, year, hour, min, sec] = match;
-  const monthMap = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
-  };
+    const [_, day, monthStr, year, hour, min, sec] = match;
+    const monthMap = {
+        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+    };
 
-  const month = monthMap[monthStr];
-  const date = new Date(Date.UTC(year, month, day, hour, min, sec));
-  return `${date.getTime()}000000`;
+    const month = monthMap[monthStr];
+    const date = new Date(Date.UTC(year, month, day, hour, min, sec));
+    return `${date.getTime()}000000`;
 }
 
 async function countLines(path) {
-  const fileStream = fs.createReadStream(path);
-  const rl = readline.createInterface({ input: fileStream });
-  let count = 0;
-  for await (const _ of rl) {
-    count++;
-  }
-  return count;
+    const fileStream = fs.createReadStream(path);
+    const rl = readline.createInterface({ input: fileStream });
+    let count = 0;
+    for await (const _ of rl) {
+        count++;
+    }
+    return count;
 }
 
 (async () => {
-  console.log(`📊 Counting lines in ${filePath}...`);
-  const totalLines = await countLines(filePath);
+    console.log(`📊 Counting lines in ${filePath}...`);
+    const totalLines = await countLines(filePath);
 
-  const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-  bar.start(totalLines, 0);
+    const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+    bar.start(totalLines, 0);
 
-  const fileStream = fs.createReadStream(filePath);
-  const rl = readline.createInterface({ input: fileStream });
+    const fileStream = fs.createReadStream(filePath);
+    const rl = readline.createInterface({ input: fileStream });
 
-  let batch = [];
-  let lineCount = 0;
+    let batch = [];
+    let lineCount = 0;
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
+    for await (const line of rl) {
+        if (!line.trim()) continue;
 
-    batch.push(line);
-    lineCount++;
-    bar.increment();
+        batch.push(line);
+        lineCount++;
+        bar.increment();
 
-    if (batch.length >= BATCH_SIZE) {
-      await pushBatch(batch);
-      batch = [];
+        if (batch.length >= BATCH_SIZE) {
+            await pushBatch(batch);
+            batch = [];
+        }
     }
-  }
 
-  if (batch.length) {
-    await pushBatch(batch);
-  }
+    if (batch.length) {
+        await pushBatch(batch);
+    }
 
-  bar.stop();
-  console.log('✅ Import complete.');
+    bar.stop();
+    console.log('✅ Import complete.');
 })();

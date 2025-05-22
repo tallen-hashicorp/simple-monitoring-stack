@@ -48,3 +48,11 @@ kubectl delete -f k8s
 ```bash
 node loki-import/app.js nginx-access.log
 ```
+
+### Some CLI log counting stuff
+
+```bash
+pv nginx-access.log | awk '{print $9}' | sort | uniq -c | sort -nr
+
+pv nginx-access.log | awk -F'"' '{print $2}' | awk '{print $1}' | sort | uniq -c | sort -nr
+```
