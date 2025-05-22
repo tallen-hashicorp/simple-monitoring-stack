@@ -49,10 +49,30 @@ kubectl delete -f k8s
 node loki-import/app.js nginx-access.log
 ```
 
-### Some CLI log counting stuff
+## CLI Log Analysis with awk, pv, sort, uniq
 
+Analyze an Nginx-style access log using simple shell commands:
+
+### Count by HTTP Status Code
 ```bash
 pv nginx-access.log | awk '{print $9}' | sort | uniq -c | sort -nr
+```
 
+### Count by HTTP Method
+```bash
 pv nginx-access.log | awk -F'"' '{print $2}' | awk '{print $1}' | sort | uniq -c | sort -nr
 ```
+
+### Count by IP Address
+```bash
+pv nginx-access.log | awk '{print $1}' | sort | uniq -c | sort -nr
+```
+
+### Count by User-Agent
+```bash
+pv nginx-access.log | awk -F'"' '{print $6}' | sort | uniq -c | sort -nr
+```
+
+💡 Tip: Use head -n 10 at the end of any pipeline to show only the top 10 results.
+
+---
