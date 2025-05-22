@@ -24,6 +24,11 @@ kubectl -n monitoring port-forward services/prometheus-service 9090:9090
 kubectl -n monitoring port-forward services/pushgateway 9091:9091
 ```
 
+**Loki**
+```bash
+kubectl -n monitoring port-forward services/loki 3100:3100
+```
+
 ## Using the Gauge in Grafana
 Push your data to the Pushgateway like this:
 ```bash

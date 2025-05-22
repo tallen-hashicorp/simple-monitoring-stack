@@ -24,6 +24,28 @@ data:
         static_configs:
           - targets: ['pushgateway:9091']
 ---
+# Grafana Data Source ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  namespace: monitoring
+  labels:
+    app: grafana
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-service:9090
+        isDefault: true
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+---
 # Prometheus Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -54,80 +76,6 @@ spec:
         - name: prometheus-config-volume
           configMap:
             name: prometheus-config
----
-# Prometheus Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus-service
-  namespace: monitoring
-  labels:
-    app: prometheus
-spec:
-  type: NodePort
-  ports:
-    - port: 9090
-      targetPort: 9090
-  selector:
-    app: prometheus
----
-# Pushgateway Deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: pushgateway-deployment
-  namespace: monitoring
-  labels:
-    app: pushgateway
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: pushgateway
-  template:
-    metadata:
-      labels:
-        app: pushgateway
-    spec:
-      containers:
-        - name: pushgateway
-          image: prom/pushgateway:v1.4.2
-          ports:
-            - containerPort: 9091
----
-# Pushgateway Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: pushgateway
-  namespace: monitoring
-  labels:
-    app: pushgateway
-spec:
-  type: NodePort
-  ports:
-    - port: 9091
-      targetPort: 9091
-  selector:
-    app: pushgateway
----
-# Grafana Data Source ConfigMap
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-datasource
-  namespace: monitoring
-  labels:
-    app: grafana
-data:
-  datasource.yaml: |
-    apiVersion: 1
-    datasources:
-      - name: Prometheus
-        type: prometheus
-        access: proxy
-        url: http://prometheus-service:9090
-        isDefault: true
 ---
 # Grafana Deployment with Correct Volume Mount
 apiVersion: apps/v1
@@ -161,6 +109,86 @@ spec:
           configMap:
             name: grafana-datasource
 ---
+# Pushgateway Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pushgateway-deployment
+  namespace: monitoring
+  labels:
+    app: pushgateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pushgateway
+  template:
+    metadata:
+      labels:
+        app: pushgateway
+    spec:
+      containers:
+        - name: pushgateway
+          image: prom/pushgateway:v1.4.2
+          ports:
+            - containerPort: 9091
+---
+# Loki Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki-deployment
+  namespace: monitoring
+  labels:
+    app: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      containers:
+        - name: loki
+          image: grafana/loki:2.9.0
+          ports:
+            - containerPort: 3100
+---
+# Pushgateway Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: pushgateway
+  namespace: monitoring
+  labels:
+    app: pushgateway
+spec:
+  type: NodePort
+  ports:
+    - port: 9091
+      targetPort: 9091
+  selector:
+    app: pushgateway
+---
+# Prometheus Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  type: NodePort
+  ports:
+    - port: 9090
+      targetPort: 9090
+  selector:
+    app: prometheus
+---
 # Grafana Service
 apiVersion: v1
 kind: Service
@@ -176,3 +204,19 @@ spec:
       targetPort: 3000
   selector:
     app: grafana
+---
+# Loki Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    app: loki
+spec:
+  type: NodePort
+  ports:
+    - port: 3100
+      targetPort: 3100
+  selector:
+    app: loki
