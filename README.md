@@ -40,3 +40,11 @@ Add Prometheus as a data source in Grafana, then create a gauge panel and use ga
 ```bash
 kubectl delete -f k8s
 ```
+
+---
+
+## Manually process NGINX logs to loki
+
+```bash
+node 
+```
